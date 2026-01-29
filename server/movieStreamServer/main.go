@@ -26,7 +26,11 @@ func main() {
 	}
 
 	mux.HandleFunc("GET /movies", handlers.GetMovieHandler)
+	mux.HandleFunc("GET /movie/{imdb_id}", handlers.GetOneMovieHandler)
+	mux.HandleFunc("POST /addmovie", handlers.AddMovie)
+	mux.HandleFunc("POST /register", handlers.AddUser)
+	mux.HandleFunc("POST /login", handlers.LoginUser)
 
 	fmt.Println("Starting movie stream server on :8080")
-	srv.ListenAndServe()
+	log.Fatal(srv.ListenAndServe())
 }
