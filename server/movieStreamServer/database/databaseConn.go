@@ -2,8 +2,6 @@ package database
 
 import (
 	"context"
-	"errors"
-	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,12 +10,7 @@ import (
 
 var client *mongo.Client
 
-func DBinstance() error {
-
-	uri := os.Getenv("MONGODB_URI")
-	if uri == "" {
-		return errors.New("MONGODB_URI not set")
-	}
+func DBinstance(uri string) error {
 
 	conn := options.Client().ApplyURI(uri)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -37,7 +30,6 @@ func DBinstance() error {
 
 }
 
-func OpenCollection(collectionName string) *mongo.Collection {
-	dbName := os.Getenv("DATABASE_NAME")
+func OpenCollection(collectionName, dbName string) *mongo.Collection {
 	return client.Database(dbName).Collection(collectionName)
 }

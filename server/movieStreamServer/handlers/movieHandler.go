@@ -15,14 +15,14 @@ import (
 
 var validate = validator.New()
 
-func GetMovieHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg Config) GetMovieHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	w.Header().Set("Content-Type", "application/json")
 
 	var movies []modelStructs.Movie
-	collection := database.OpenCollection("movies")
+	collection := database.OpenCollection("movies", cfg.DbName)
 
 	cursor, err := collection.Find(ctx, bson.M{})
 	if err != nil {
@@ -42,7 +42,7 @@ func GetMovieHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetOneMovieHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg Config) GetOneMovieHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -51,7 +51,7 @@ func GetOneMovieHandler(w http.ResponseWriter, r *http.Request) {
 	imdbID := r.PathValue("imdb_id")
 
 	var movie modelStructs.Movie
-	collection := database.OpenCollection("movies")
+	collection := database.OpenCollection("movies", cfg.DbName)
 
 	if err := collection.FindOne(ctx, bson.M{"imdb_id": imdbID}).Decode(&movie); err != nil {
 		http.Error(w, fmt.Sprintf("Movie not found:%v", err), http.StatusNotFound)
@@ -63,14 +63,14 @@ func GetOneMovieHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func AddMovie(w http.ResponseWriter, r *http.Request) {
+func (cfg Config) AddMovie(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	var movie modelStructs.Movie
 
 	err := json.NewDecoder(r.Body).Decode(&movie)
-	r.Body.Close()
+	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("error decoding body: %v", err), http.StatusInternalServerError)
 		return
@@ -81,10 +81,11 @@ func AddMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	collection := database.OpenCollection("movies")
+	collection := database.OpenCollection("movies", cfg.DbName)
 	res, err := collection.InsertOne(ctx, movie)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error adding movie: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusCreated)

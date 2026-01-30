@@ -9,19 +9,16 @@ import (
 
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/modelStructs"
+	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/utils"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"golang.org/x/crypto/bcrypt"
 )
 
-func HashPassword(password string) (string, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedPassword), nil
+type Config struct {
+	JwtSecret string
+	DbName    string
 }
 
-func AddUser(w http.ResponseWriter, r *http.Request) {
+func (cfg Config) AddUser(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -37,12 +34,12 @@ func AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword, err := HashPassword(user.Password)
+	hashedPassword, err := utils.HashPassword(user.Password)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("error hashing password: %v", err), http.StatusInternalServerError)
 		return
 	}
-	collection := database.OpenCollection("users")
+	collection := database.OpenCollection("users", cfg.DbName)
 
 	count, err := collection.CountDocuments(ctx, bson.M{"email": user.Email})
 	if err != nil {
@@ -69,7 +66,7 @@ func AddUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-func LoginUser(w http.ResponseWriter, r *http.Request) {
+func (cfg Config) LoginUser(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -82,16 +79,46 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	var user modelStructs.User
 
-	collection := database.OpenCollection("users")
+	collection := database.OpenCollection("users", cfg.DbName)
 
 	if err := collection.FindOne(ctx, bson.M{"email": userLogin.Email}).Decode(&user); err != nil {
 		http.Error(w, "Invalid Email", http.StatusUnauthorized)
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(userLogin.Password)); err != nil {
+	if err := utils.CheckPasswordAndHash(userLogin.Password, user.Password); err != nil {
 		http.Error(w, "Wrong Password", http.StatusUnauthorized)
 		return
 	}
+
+	hashedPass, err := utils.MakeJwt(user.UserID, cfg.JwtSecret, user.Role, time.Hour)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error creating JWT: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	refreshToken, err := utils.MakeRefreshToken()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error creating Refresh Token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := utils.AddToken(user.UserID, hashedPass, refreshToken, cfg.DbName); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to update token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	userRes := modelStructs.UserResponse{
+		UserID:         user.UserID,
+		FirstName:      user.FirstName,
+		LastName:       user.LastName,
+		Email:          user.Email,
+		Role:           user.Role,
+		Token:          hashedPass,
+		RefreshToken:   refreshToken,
+		FavoriteGenres: user.FavoriteGenres,
+	}
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(userRes)
 
 }
