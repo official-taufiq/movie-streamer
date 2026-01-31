@@ -11,6 +11,7 @@ import (
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/modelStructs"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"golang.org/x/tools/go/analysis/passes/defers"
 )
 
 var validate = validator.New()
@@ -90,4 +91,43 @@ func (cfg Config) AddMovie(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(res)
+}
+
+func AdminReview(w http.ResponseWriter, r *http.Request) {
+	imdbId := r.PathValue("imdb_id")
+
+	req := struct {
+		AdminReview string `json:"admin_review"`
+	}{}
+
+	res := struct {
+		AdminReview string `json:"admin_review"`
+		Ranking     string `json:"ranking"`
+	}{}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Error decoding request", http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+
+}
+
+func (cfg Config) GetRankings() ([]modelStructs.Ranking, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var rankings []modelStructs.Ranking
+	collection := database.OpenCollection("rankings", cfg.DbName)
+
+	cursor, err := collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	if err := cursor.All(ctx, &rankings); err != nil {
+		return nil, err
+	}
+	return rankings, nil
 }
