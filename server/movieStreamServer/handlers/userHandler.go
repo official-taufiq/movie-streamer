@@ -4,18 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"time"
-
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/modelStructs"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/utils"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"net/http"
+	"time"
 )
 
 type Config struct {
-	JwtSecret string
-	DbName    string
+	JwtSecret  string
+	DbName     string
+	BasePrompt string
+	ApiKey     string
 }
 
 func (cfg Config) AddUser(w http.ResponseWriter, r *http.Request) {

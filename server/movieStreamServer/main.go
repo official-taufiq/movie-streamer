@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/joho/godotenv"
-	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
-	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/handlers"
-	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/middlewares"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
+	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
+	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/handlers"
+	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/middlewares"
 )
 
 func main() {
@@ -20,13 +21,17 @@ func main() {
 	secret := os.Getenv("JWT_SECRET")
 	uri := os.Getenv("MONGODB_URI")
 	dbName := os.Getenv("DATABASE_NAME")
+	basePrompt := os.Getenv("BASE_PROMPT")
+	apiKey := os.Getenv("API_KEY")
 
 	authCfg := middlewares.Config{
 		JwtSecret: secret,
 	}
 	handlerCfg := handlers.Config{
-		JwtSecret: secret,
-		DbName:    dbName,
+		JwtSecret:  secret,
+		DbName:     dbName,
+		BasePrompt: basePrompt,
+		ApiKey:     apiKey,
 	}
 
 	if err = database.DBinstance(uri); err != nil {

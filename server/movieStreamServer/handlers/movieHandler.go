@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/modelStructs"
+	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/utils"
+	"github.com/tmc/langchaingo/llms/openai"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"golang.org/x/tools/go/analysis/passes/defers"
 )
 
 var validate = validator.New()
@@ -93,7 +95,7 @@ func (cfg Config) AddMovie(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-func AdminReview(w http.ResponseWriter, r *http.Request) {
+func (cfg Config) AdminReview(w http.ResponseWriter, r *http.Request) {
 	imdbId := r.PathValue("imdb_id")
 
 	req := struct {
@@ -111,23 +113,48 @@ func AdminReview(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
+	llmRes, rankingValue, err := GetReviewRanking(cfg.ApiKey, cfg.BasePrompt, cfg.DbName, req.AdminReview)
+	if err != nil {
+		http.Error(w, "")
+	}
+
 }
 
-func (cfg Config) GetRankings() ([]modelStructs.Ranking, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	var rankings []modelStructs.Ranking
-	collection := database.OpenCollection("rankings", cfg.DbName)
-
-	cursor, err := collection.Find(ctx, bson.M{})
+func GetReviewRanking(apiKey, basePrompt, dbName, admin_review string) (string, int, error) {
+	rankings, err := utils.GetRankings(dbName)
 	if err != nil {
-		return nil, err
+		return "", 0, err
 	}
-	defer cursor.Close(ctx)
 
-	if err := cursor.All(ctx, &rankings); err != nil {
-		return nil, err
+	str := ""
+
+	for _, ranking := range rankings {
+		if ranking.RankingValue != 999 {
+			str = str + ranking.RankingName + ","
+		}
 	}
-	return rankings, nil
+
+	str = strings.Trim(str, ",")
+
+	llm, err := openai.New(openai.WithToken(apiKey))
+	if err != nil {
+		return "", 0, err
+	}
+
+	prompt := strings.Replace(basePrompt, "{rankings}", str, 1)
+
+	res, err := llm.Call(context.Background(), prompt+admin_review)
+	if err != nil {
+		return "", 0, err
+	}
+
+	rankingValue := 0
+
+	for _, ranking := range rankings {
+		if ranking.RankingName == res {
+			rankingValue = ranking.RankingValue
+			break
+		}
+	}
+	return res, rankingValue, nil
 }
