@@ -4,16 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"strings"
-	"time"
-
 	"github.com/go-playground/validator/v10"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/modelStructs"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/utils"
-	"github.com/tmc/langchaingo/llms/openai"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"net/http"
+	"time"
 )
 
 var validate = validator.New()
@@ -96,15 +93,14 @@ func (cfg Config) AddMovie(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg Config) AdminReview(w http.ResponseWriter, r *http.Request) {
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
 	imdbId := r.PathValue("imdb_id")
 
 	req := struct {
 		AdminReview string `json:"admin_review"`
-	}{}
-
-	res := struct {
-		AdminReview string `json:"admin_review"`
-		Ranking     string `json:"ranking"`
 	}{}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -113,48 +109,47 @@ func (cfg Config) AdminReview(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	llmRes, rankingValue, err := GetReviewRanking(cfg.ApiKey, cfg.BasePrompt, cfg.DbName, req.AdminReview)
+	llmRes, rankingValue, err := utils.GetReviewRanking(cfg.ApiKey, cfg.BasePrompt, cfg.DbName, req.AdminReview)
 	if err != nil {
-		http.Error(w, "")
+		http.Error(w, "Error getting a review ranking", http.StatusInternalServerError)
+		return
 	}
 
-}
+	collection := database.OpenCollection("movies", cfg.DbName)
 
-func GetReviewRanking(apiKey, basePrompt, dbName, admin_review string) (string, int, error) {
-	rankings, err := utils.GetRankings(dbName)
+	var movie modelStructs.Movie
+
+	if err := collection.FindOne(ctx, bson.M{"imdb_id": imdbId}).Decode(&movie); err != nil {
+		http.Error(w, fmt.Sprintf("Movie not found:%v", err), http.StatusNotFound)
+		return
+	}
+
+	updateData := bson.M{
+		"$set": bson.M{
+			"admin_review": req.AdminReview,
+			"ranking": bson.M{
+				"ranking_value": rankingValue,
+				"ranking_name":  llmRes,
+			},
+		},
+	}
+
+	result, err := collection.UpdateOne(ctx, bson.M{"imdb_id": imdbId}, updateData)
 	if err != nil {
-		return "", 0, err
+		http.Error(w, "Error updating data", http.StatusInternalServerError)
+		return
+	}
+	if result.MatchedCount == 0 {
+		http.Error(w, "No movie found with the provided imdb ID", http.StatusBadRequest)
+		return
 	}
 
-	str := ""
-
-	for _, ranking := range rankings {
-		if ranking.RankingValue != 999 {
-			str = str + ranking.RankingName + ","
-		}
-	}
-
-	str = strings.Trim(str, ",")
-
-	llm, err := openai.New(openai.WithToken(apiKey))
-	if err != nil {
-		return "", 0, err
-	}
-
-	prompt := strings.Replace(basePrompt, "{rankings}", str, 1)
-
-	res, err := llm.Call(context.Background(), prompt+admin_review)
-	if err != nil {
-		return "", 0, err
-	}
-
-	rankingValue := 0
-
-	for _, ranking := range rankings {
-		if ranking.RankingName == res {
-			rankingValue = ranking.RankingValue
-			break
-		}
-	}
-	return res, rankingValue, nil
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(struct {
+		RankingName string `json:"ranking_name"`
+		AdminReview string `json:"admin_review"`
+	}{
+		RankingName: req.AdminReview,
+		AdminReview: llmRes,
+	})
 }
