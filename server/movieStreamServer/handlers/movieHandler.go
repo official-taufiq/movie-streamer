@@ -8,7 +8,9 @@ import (
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/modelStructs"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/utils"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"log"
 	"net/http"
 	"time"
 )
@@ -109,9 +111,10 @@ func (cfg Config) AdminReview(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	llmRes, rankingValue, err := utils.GetReviewRanking(cfg.ApiKey, cfg.BasePrompt, cfg.DbName, req.AdminReview)
+	llmRes, rankingValue, err := utils.GetReviewRanking(cfg.Genkit, cfg.BasePrompt, cfg.DbName, req.AdminReview)
 	if err != nil {
 		http.Error(w, "Error getting a review ranking", http.StatusInternalServerError)
+		log.Fatal(err)
 		return
 	}
 
@@ -152,4 +155,37 @@ func (cfg Config) AdminReview(w http.ResponseWriter, r *http.Request) {
 		RankingName: req.AdminReview,
 		AdminReview: llmRes,
 	})
+}
+
+func (cfg Config) GetRecommendations(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	userId := r.Context().Value("userID").(string)
+
+	favGenres, err := utils.GetUserFavGenre(userId, cfg.DbName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Internal error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	findOptions := options.Find().SetSort(bson.M{"ranking.ranking_value": 1}).SetLimit(cfg.MovieLimit)
+
+	collection := database.OpenCollection("movies", cfg.DbName)
+	cursor, err := collection.Find(ctx, bson.M{"genre.genre_name": bson.M{"$in": favGenres}}, findOptions)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error fetching recommended movies: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	recommendedMovies := make([]modelStructs.Movie, 0)
+
+	if err := cursor.All(ctx, &recommendedMovies); err != nil {
+		http.Error(w, "Error getting recommended movies", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(recommendedMovies)
 }

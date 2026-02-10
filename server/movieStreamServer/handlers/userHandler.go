@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/firebase/genkit/go/genkit"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/modelStructs"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/utils"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"net/http"
-	"time"
 )
 
 type Config struct {
@@ -17,6 +19,8 @@ type Config struct {
 	DbName     string
 	BasePrompt string
 	ApiKey     string
+	Genkit     *genkit.Genkit
+	MovieLimit int64
 }
 
 func (cfg Config) AddUser(w http.ResponseWriter, r *http.Request) {
