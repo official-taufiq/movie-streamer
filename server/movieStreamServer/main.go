@@ -63,10 +63,10 @@ func main() {
 	mux.Handle("GET /movie/{imdb_id}", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.GetOneMovieHandler)))
 	mux.Handle("POST /addmovie", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.AddMovie)))
 	mux.Handle("GET /recmovies", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.GetRecommendations)))
+	mux.Handle("POST /adminreview/{imdb_id}", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.AdminReview)))
 	mux.HandleFunc("GET /movies", handlerCfg.GetMovieHandler)
 	mux.HandleFunc("POST /register", handlerCfg.AddUser)
 	mux.HandleFunc("POST /login", handlerCfg.LoginUser)
-	mux.HandleFunc("POST /adminreview/{imdb_id}", handlerCfg.AdminReview)
 
 	fmt.Println("Starting movie stream server on :8080")
 	log.Fatal(srv.ListenAndServe())

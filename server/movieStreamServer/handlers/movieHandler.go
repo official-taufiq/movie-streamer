@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/http"
+	"time"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/modelStructs"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/utils"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"log"
-	"net/http"
-	"time"
 )
 
 var validate = validator.New()
@@ -98,6 +99,12 @@ func (cfg Config) AdminReview(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+
+	role := ctx.Value("role").(string)
+	if role != "ADMIN" {
+		http.Error(w, "Only Admins are allowed to add movie review", http.StatusUnauthorized)
+		return
+	}
 
 	imdbId := r.PathValue("imdb_id")
 
