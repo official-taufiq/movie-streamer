@@ -8,7 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var client *mongo.Client
+var Client *mongo.Client
 
 func DBinstance(uri string) error {
 
@@ -18,11 +18,11 @@ func DBinstance(uri string) error {
 
 	var err error
 
-	client, err = mongo.Connect(ctx, conn)
+	Client, err = mongo.Connect(ctx, conn)
 	if err != nil {
 		return err
 	}
-	if err := client.Ping(ctx, nil); err != nil {
+	if err := Client.Ping(ctx, nil); err != nil {
 		return err
 	}
 
@@ -31,5 +31,5 @@ func DBinstance(uri string) error {
 }
 
 func OpenCollection(collectionName, dbName string) *mongo.Collection {
-	return client.Database(dbName).Collection(collectionName)
+	return Client.Database(dbName).Collection(collectionName)
 }

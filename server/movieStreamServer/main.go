@@ -3,18 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
-	"strconv"
-	"time"
-
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
 	"github.com/joho/godotenv"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/database"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/handlers"
 	"github.com/official-taufiq/movie-streamer/server/movieStreamServer/middlewares"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
 )
 
 func main() {
@@ -51,6 +50,14 @@ func main() {
 	if err = database.DBinstance(uri); err != nil {
 		log.Fatalf("Mongo connection failed: %v", err)
 	}
+
+	defer func() {
+		err := database.Client.Disconnect(context.Background())
+		if err != nil {
+			log.Fatalf("Failed to disconnect from mongoDB: %v", err)
+		}
+	}()
+
 	mux := http.NewServeMux()
 	srv := http.Server{
 		Addr:         ":8080",
@@ -63,7 +70,7 @@ func main() {
 	mux.Handle("GET /movie/{imdb_id}", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.GetOneMovieHandler)))
 	mux.Handle("POST /addmovie", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.AddMovie)))
 	mux.Handle("GET /recmovies", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.GetRecommendations)))
-	mux.Handle("POST /adminreview/{imdb_id}", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.AdminReview)))
+	mux.Handle("PATCH /adminreview/{imdb_id}", authCfg.AuthMiddleware(http.HandlerFunc(handlerCfg.AdminReview)))
 	mux.HandleFunc("GET /movies", handlerCfg.GetMovieHandler)
 	mux.HandleFunc("POST /register", handlerCfg.AddUser)
 	mux.HandleFunc("POST /login", handlerCfg.LoginUser)
